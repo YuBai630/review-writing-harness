@@ -143,16 +143,26 @@ The output Markdown files preserve the original heading hierarchy, paragraph str
 
 ### Launch the Workflow
 
-```bash
-# 1. Place your framework as local_framework.md in your paper directory
-# 2. Run the preparation script
-python scripts/prepare_local_md_review.py \
-  --framework /path/to/local_framework.md \
-  --corpus /path/to/markdown/papers
+Prepare your files, then type a prompt in Claude Code:
 
-# 3. Follow the generated prompts through the workflow:
-#    Doctor → Voter → Expert → Synthesizer → Main Writer → Validate
+```bash
+# 1. Organize your framework and papers
+your_project/
+├── local_framework.md    # H1/H2 structure + word target (see format below)
+└── papers/               # Converted Markdown papers (from previous step)
 ```
+
+In your Claude Code session, simply type:
+
+> Based on the papers in ./papers and the ./local_framework.md framework, invoke the nature-writing local workflow to complete the literature review.
+
+Claude Code will automatically execute the full pipeline:
+
+```
+Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) → Main Writer → Validate
+```
+
+All intermediate artifacts (evidence JSON, voting results, synthesis grids, validation report) and the final `literature_review.md` are written to `papers/nature_local_review_YYYYMMDD_HHMMSS/`.
 
 ### Framework Format
 

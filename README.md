@@ -142,16 +142,26 @@ python pdf_to_md/batch_convert.py --input /path/to/pdfs --output /path/to/markdo
 
 ### 启动工作流
 
-```bash
-# 1. 将你的框架文件命名为 local_framework.md 放入论文目录
-# 2. 运行准备脚本
-python scripts/prepare_local_md_review.py \
-  --framework /path/to/local_framework.md \
-  --corpus /path/to/markdown/papers
+将以下文件准备好后，在 Claude Code 中输入提示词即可启动：
 
-# 3. 按生成的提示词依次执行工作流：
-#    Doctor → Voter → Expert → Synthesizer → Main Writer → Validate
+```bash
+# 1. 将你的框架和论文准备好
+your_project/
+├── local_framework.md    # H1/H2 结构 + 字数目标（见下方格式）
+└── papers/               # 转换后的 Markdown 论文（上一步的输出）
 ```
+
+在 Claude Code 对话中直接输入：
+
+> 基于 ./papers 目录下的论文和 ./local_framework.md 框架，调用 nature-writing 的本地工作流完成综述。
+
+Claude Code 会自动完成全套流水线：
+
+```
+Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) → Main Writer → Validate
+```
+
+所有中间产物（证据 JSON、投票结果、综合网格、验证报告）和最终综述 `literature_review.md` 都会输出到 `papers/nature_local_review_YYYYMMDD_HHMMSS/` 目录中。
 
 ### 框架格式
 
