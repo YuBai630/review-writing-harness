@@ -1,136 +1,142 @@
-# Review Writing Harness
+[![中文](https://img.shields.io/badge/语言-中文-red)](README.md) [![English](https://img.shields.io/badge/Language-English-blue)](README_EN.md)
 
-A synthesis-first multi-agent workflow for writing literature reviews from local Markdown paper corpora. Built as an extension to the `nature-writing` skill in Claude Code.
+# Review Writing Harness（综述写作框架）
 
-## The Problem
+基于本地 Markdown 论文语料库的 synthesis-first 多智能体文献综述写作工作流。作为 Claude Code 中 `nature-writing` 技能的增强扩展。
 
-Traditional literature review workflows produce **paper-by-paper laundry lists**: "Smith et al. proposed X and achieved 92%. Jones et al. proposed Y and achieved 88%. Lee et al. proposed Z..." — each paragraph is a single-paper summary, with no cross-paper comparison, no performance range synthesis, no incomparability warnings, and no structured comparison tables.
+## 解决的问题
 
-## Our Solution
+传统文献综述工作流产出的往往是**"逐篇罗列"式文本**："Smith 等人提出 X，准确率 92%。Jones 等人提出 Y，准确率 88%。Lee 等人提出 Z……"——每个段落是一篇论文的孤立摘要，缺少跨论文横向比较、缺少性能范围综合、缺少不可比性警告、缺少结构化比较表格。
 
-`review-writing-harness` adds three key innovations to the local-MD review pipeline:
+## 我们的方案
 
-### 1. Synthesis-First Writing Protocol
+`review-writing-harness` 为本地 Markdown 综述流程引入了三项核心创新：
 
-Every H2 section is written in a mandatory 4-layer order:
-- **Layer 1 (30-40%)**: Synthesis first — open with the *range* of observed results, not individual numbers
-- **Layer 2 (40-50%)**: Methodological grouping — cluster papers by shared approach and compare/contrast *within* each group
-- **Layer 3 (10-20%)**: Individual deep-dives — only for ≤2 landmark papers per section, with explicit justification
-- **Layer 4 (10%)**: Critical gap / incomparability analysis — what dimensions are missing? Where do comparisons break?
+### 1. Synthesis-First 写作协议
 
-### 2. Table-First Synthesis Phase
+每个 H2 节按强制性的 4 层顺序撰写：
+- **第一层（30-40%）**：综合优先——以观察到的*结果范围*开头，而非逐个论文的孤立数值
+- **第二层（40-50%）**：方法论分组——按共享方法将论文聚类，在组内进行比较与对比
+- **第三层（10-20%）**：个别深挖——仅限每个 H2 最多 2 篇里程碑式论文，需明确说明深挖理由
+- **第四层（10%）**：关键缺口/不可比性分析——哪些比较维度缺失？哪些比较因方法不兼容而失效？
 
-A new synthesizer subagent stage inserted between evidence collection and drafting. Every H1 section gets a dedicated synthesizer that produces:
-- **Comparison table** spanning all papers with 12 structured dimensions (device type, modalities, sample size, population, n_classes, label standard, validation protocol, kappa, accuracy, model class, parameter count)
-- **Performance range summary** (upper bound, lower bound, main cluster, outliers with causal explanation)
-- **Incomparability warnings** (paper pairs whose numbers should NOT be compared, with reasons)
-- **Cross-paper synthesis patterns** (3-5 patterns spanning ≥2 papers each)
+### 2. Table-First 综合阶段
 
-### 3. Structured Comparative Dimensions
+在证据收集与正文撰写之间新增合成器子代理阶段。每个 H1 节分配一个专用合成器，产出：
+- **比较表**：跨越全部论文，含 12 个结构化维度（设备类型、模态、样本量、人群、分类数、标签标准、验证协议、kappa、准确率、模型类别、参数量）
+- **性能范围摘要**（上界、下界、主流聚类、离群值及其因果解释）
+- **不可比性警告**（不应直接比较的论文对，附原因说明）
+- **跨论文综合模式**（3-5 个横跨 ≥2 篇论文的模式）
 
-The evidence schema is extended with a `comparative_dimensions` field that doctors must populate: `device_type`, `modalities`, `sample_size`, `population`, `n_classes`, `label_standard`, `validation`, `primary_metric`, `model_class`, `parameter_count`. This enables automated comparison table generation and systematic cross-study analysis.
+### 3. 结构化比较维度
 
-## Workflow Architecture
+证据 schema 扩展了 `comparative_dimensions` 字段，要求 doctor 代理必须填充：`device_type`、`modalities`、`sample_size`、`population`、`n_classes`、`label_standard`、`validation`、`primary_metric`、`model_class`、`parameter_count`。这使得自动生成比较表和系统化跨研究分析成为可能。
+
+## 工作流架构
 
 ```
 Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) → Main Writer → Validate
 ```
 
-| Phase | Agents | Function |
-|-------|--------|----------|
-| Prepare | 1 script | Parse framework, batch papers, generate all prompts |
-| Doctors | ≤6 concurrent | Read papers, extract evidence with comparative_dimensions |
-| Voters | 3 (2-of-3 majority) | Vote on paper-H2 inclusion |
-| Expert Merge | 1 | Deduplicate, sort, build evidence map |
-| **Synthesizers** | **Per H1 section** | **Generate comparison tables, ranges, patterns, warnings** |
-| Main Writer | 1 | Draft review following synthesis-first protocol |
-| Validate | 1 script | Check word count, table coverage, synthesis density |
+| 阶段 | 代理数 | 功能 |
+|------|--------|------|
+| Prepare | 1 脚本 | 解析框架、分批论文、生成全部提示词 |
+| Doctors | ≤6 并发 | 阅读论文，提取含 comparative_dimensions 的证据 |
+| Voters | 3（2-of-3 多数决） | 投票决定论文-H2 分配 |
+| Expert Merge | 1 | 去重、排序、构建证据映射 |
+| **Synthesizers** | **每 H1 节一个** | **生成比较表、范围、模式、不可比警告** |
+| Main Writer | 1 | 按 synthesis-first 协议撰写综述 |
+| Validate | 1 脚本 | 检查字数、表格覆盖、综合密度 |
 
-## Forbidden Patterns (auto-rejected)
+## 禁止模式（自动拒绝）
 
-- Consecutive paragraphs each starting with an author name
-- Standalone "X achieved accuracy Y%" sentences without comparison to another paper
-- More than two consecutive sentences beginning with an author name
-- Tables that only list paper titles and one metric (laundry list in table form)
+- 连续多个段落以作者名开头
+- 孤立出现"X 达到准确率 Y%"而无与其他论文比较的句子
+- 连续两句以上以作者名开头
+- 仅列出论文标题和一个指标的比较表（换汤不换药的逐篇罗列）
 
-## File Structure
+## 文件结构
 
 ```
 nature-writing/
-├── SKILL.md                          # Skill router
-├── manifest.yaml                     # Axis detection manifest
+├── SKILL.md                          # 技能路由
+├── manifest.yaml                     # 轴检测清单
 ├── scripts/
-│   ├── prepare_local_md_review.py    # Preparation + all prompt generation
-│   ├── validate_word_count.py        # Word count validation
-│   └── validate_citation_order.py    # Citation coherence validation
+│   ├── prepare_local_md_review.py    # 准备脚本 + 全部提示词生成
+│   ├── validate_word_count.py        # 字数验证
+│   └── validate_citation_order.py    # 引用一致性验证
 ├── references/
-│   ├── local-md-review.md            # Complete workflow specification
-│   └── ...                           # Section drafting references
-├── static/                           # Versioned content fragments
-│   ├── core/                         # Stance, workflow, output format
-│   └── fragments/                    # Per-axis fragments (paper_type, section, language, journal)
-└── agents/                           # Agent configuration
+│   ├── local-md-review.md            # 完整工作流规范
+│   └── ...                           # 各章节撰写参考
+├── static/                           # 版本化内容片段
+│   ├── core/                         # 核心立场、工作流、输出格式
+│   └── fragments/                    # 按轴切片的片段（paper_type/section/language/journal）
+└── agents/                           # 代理配置
 ```
 
-## Quick Start
+## 快速开始
 
 ```bash
-# 1. Place your framework as local_framework.md in your paper directory
-# 2. Run the preparation script
+# 1. 将你的框架文件命名为 local_framework.md 放入论文目录
+# 2. 运行准备脚本
 python scripts/prepare_local_md_review.py \
   --framework /path/to/local_framework.md \
   --corpus /path/to/markdown/papers
 
-# 3. Follow the generated prompts through the workflow:
+# 3. 按生成的提示词依次执行工作流：
 #    Doctor → Voter → Expert → Synthesizer → Main Writer → Validate
 ```
 
-### Framework Format
+### 框架格式
 
 ```markdown
-# 1 Introduction
-## 1.1 Background and motivation
-## 1.2 Scope and organization
+# 1 引言
+## 1.1 研究背景与动机
+## 1.2 综述范围与组织结构
 
-# 2 Core Methods
-## 2.1 Method category A
-## 2.2 Method category B
+# 2 核心方法
+## 2.1 方法类别A
+## 2.2 方法类别B
 
-# 3 Challenges and Future Directions
+# 3 挑战与未来方向
 
-# 4 Conclusion
+# 4 总结
 
-Total word target: 6000
+总体字数：6000
 ```
 
-## Validation Gates
+## 验证关卡
 
-| Gate | Check | Threshold |
-|------|-------|-----------|
-| Word count | Chinese characters within target | ±10% |
-| Table coverage | ≥1 table per H1 with ≥4 evidence items | Span ≥3 papers × ≥3 dimensions |
-| Synthesis density | Cross-comparison sentences / total sentences | ≥0.25 |
-| Incomparability | No direct comparison of papers with different label standards or validation protocols | Zero violations |
-| Forbidden patterns | No author-name laundry lists | Zero violations |
+| 关卡 | 检查项 | 阈值 |
+|------|--------|------|
+| 字数 | 中文字符数在目标范围内 | ±10% |
+| 表格覆盖 | 每个 ≥4 条证据的 H1 至少 1 张表 | 跨度 ≥3 篇论文 × ≥3 个维度 |
+| 综合密度 | 跨论文比较句 / 总句数 | ≥0.25 |
+| 不可比性 | 不同标签标准或验证协议的论文不得直接比较性能数值 | 零违规 |
+| 禁止模式 | 无作者名流水账 | 零违规 |
 
-## Key Changes from Original nature-writing
+## 与原版 nature-writing 的主要差异
 
-| Original | Enhanced |
-|----------|----------|
-| Paper-by-paper citation writing | Synthesis-first 4-layer protocol |
-| No comparison tables required | Mandatory 12-dimension comparison tables |
-| No structured comparative dimensions | `comparative_dimensions` field in every evidence item |
-| No synthesis phase | Table-first synthesizer stage (per H1) |
-| Basic validation (word count only) | Table coverage, synthesis density, incomparability checks |
-| "Cite every claim" | "Group, compare, then cite" with multi-citation syntax `[@a; @b]` |
+| 原版 | 增强版 |
+|------|--------|
+| 逐篇引用式写作 | Synthesis-first 四层协议 |
+| 无比较表要求 | 强制 12 维度比较表 |
+| 无结构化比较维度 | 每条证据含 `comparative_dimensions` 字段 |
+| 无综合阶段 | Table-first 合成器阶段（每 H1） |
+| 基础验证（仅字数） | 表格覆盖、综合密度、不可比性检查 |
+| "每个主张挂引用" | "先分组、再比较、后引用"，支持多引用语法 `[@a; @b]` |
 
-## License
+## 设计理念
+
+本工作流的核心设计原则是：**证据的原子单位应当从 `(论文, 章节, 主张)` 转换为 `(章节, 比较维度, 范围)`，在代理写出第一个字之前完成这一"转置"操作。** 这是区分"真正综合"与"高级流水账"的根本差异。
+
+## 许可证
 
 MIT
 
-## Citation
+## 引用
 
-If you use this workflow in your research, please cite:
+如果在你的研究中使用本工作流，请引用：
 
 ```bibtex
 @software{review_writing_harness,
