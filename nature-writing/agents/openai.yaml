@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nature Writing"
+  short_description: "Draft Nature-style sections and local-MD reviews"
+  default_prompt: "Help me turn my claims, results, figures, Chinese notes, or a local_framework.md plus local Markdown papers into a Nature-style manuscript section or framework-controlled review with a clear claim-evidence map."
