@@ -98,20 +98,27 @@ Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) 
 ## File Structure
 
 ```
-nature-writing/
-├── SKILL.md                          # Skill router
-├── manifest.yaml                     # Axis detection manifest
-├── scripts/
-│   ├── prepare_local_md_review.py    # Preparation + all prompt generation
-│   ├── validate_word_count.py        # Word count validation
-│   └── validate_citation_order.py    # Citation coherence validation
-├── references/
-│   ├── local-md-review.md            # Complete workflow specification
-│   └── ...                           # Section drafting references
-├── static/                           # Versioned content fragments
-│   ├── core/                         # Stance, workflow, output format
-│   └── fragments/                    # Per-axis fragments (paper_type, section, language, journal)
-└── agents/                           # Agent configuration
+review-writing-harness/
+├── README.md                              # Chinese readme (default)
+├── README_EN.md                           # English readme
+├── pdf_to_md/                             # PDF → Markdown conversion tool
+│   ├── batch_convert.py                   # Batch conversion script
+│   ├── requirements.txt                   # Python dependencies
+│   └── README.md                          # Detailed usage guide
+└── nature-writing/                        # Literature review skill
+    ├── SKILL.md                           # Skill router
+    ├── manifest.yaml                      # Axis detection manifest
+    ├── scripts/
+    │   ├── prepare_local_md_review.py     # Preparation + all prompt generation
+    │   ├── validate_word_count.py         # Word count validation
+    │   └── validate_citation_order.py     # Citation coherence validation
+    ├── references/
+    │   ├── local-md-review.md             # Complete workflow specification
+    │   └── ...                            # Section drafting references
+    ├── static/                            # Versioned content fragments
+    │   ├── core/                          # Stance, workflow, output format
+    │   └── fragments/                     # Per-axis fragments
+    └── agents/                            # Agent configuration
 ```
 
 ## Quick Start
@@ -120,17 +127,17 @@ nature-writing/
 
 The **zero-hallucination guarantee** of this workflow depends on local paper reading — all cited evidence must come from your provided local Markdown files, not from the LLM's training data "memory." Therefore, you must batch-convert your PDF papers into well-structured Markdown files before starting the workflow.
 
-We recommend [MinerU](https://github.com/opendatalab/MinerU) for PDF → Markdown conversion:
+The repo includes `pdf_to_md/` (built on [marker](https://github.com/VikParuchuri/marker)) for this step:
 
 ```bash
-# Install MinerU
-pip install magic-pdf
+# 1. Install PDF conversion dependencies
+pip install -r pdf_to_md/requirements.txt
 
-# Batch convert PDF papers
-magic-pdf -p /path/to/papers/ -o /path/to/markdown/output/
+# 2. Batch convert PDF → Markdown (models ~3-5GB auto-downloaded on first run)
+python pdf_to_md/batch_convert.py --input /path/to/pdfs --output /path/to/markdown
 ```
 
-The converted Markdown files should preserve the original heading hierarchy, paragraph structure, tables, and key numerical values. Place all `.md` files in a single directory (the path you will pass to `--corpus`).
+The output Markdown files preserve the original heading hierarchy, paragraph structure, tables, and key numerical values. Place all `.md` files in a single directory (the path you will pass to `--corpus`). See [pdf_to_md/README.md](pdf_to_md/README.md) for details.
 
 > **Note**: Reading PDFs directly consumes excessive context windows and cannot precisely locate paragraphs. Always convert PDFs to Markdown first before launching the workflow.
 

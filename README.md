@@ -97,20 +97,27 @@ Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) 
 ## 文件结构
 
 ```
-nature-writing/
-├── SKILL.md                          # 技能路由
-├── manifest.yaml                     # 轴检测清单
-├── scripts/
-│   ├── prepare_local_md_review.py    # 准备脚本 + 全部提示词生成
-│   ├── validate_word_count.py        # 字数验证
-│   └── validate_citation_order.py    # 引用一致性验证
-├── references/
-│   ├── local-md-review.md            # 完整工作流规范
-│   └── ...                           # 各章节撰写参考
-├── static/                           # 版本化内容片段
-│   ├── core/                         # 核心立场、工作流、输出格式
-│   └── fragments/                    # 按轴切片的片段（paper_type/section/language/journal）
-└── agents/                           # 代理配置
+review-writing-harness/
+├── README.md                              # 中文说明
+├── README_EN.md                           # English readme
+├── pdf_to_md/                             # PDF → Markdown 转换工具
+│   ├── batch_convert.py                   # 批量转换脚本
+│   ├── requirements.txt                   # Python 依赖
+│   └── README.md                          # 详细使用说明
+└── nature-writing/                        # 综述写作技能
+    ├── SKILL.md                           # 技能路由
+    ├── manifest.yaml                      # 轴检测清单
+    ├── scripts/
+    │   ├── prepare_local_md_review.py     # 准备脚本 + 全部提示词生成
+    │   ├── validate_word_count.py         # 字数验证
+    │   └── validate_citation_order.py     # 引用一致性验证
+    ├── references/
+    │   ├── local-md-review.md             # 完整工作流规范
+    │   └── ...                            # 各章节撰写参考
+    ├── static/                            # 版本化内容片段
+    │   ├── core/                          # 核心立场、工作流、输出格式
+    │   └── fragments/                     # 按轴切片的片段
+    └── agents/                            # 代理配置
 ```
 
 ## 快速开始
@@ -119,17 +126,17 @@ nature-writing/
 
 本工作流的**零幻觉保证**建立在本地论文阅读之上——所有引用证据必须来自你提供的本地 Markdown 文件，而非 LLM 训练数据中的"记忆"。因此，在启动工作流之前，你需要将手头的 PDF 论文批量转换为结构良好的 Markdown 文件。
 
-推荐使用 [MinerU](https://github.com/opendatalab/MinerU) 进行 PDF → Markdown 转换：
+仓库内置了 `pdf_to_md/` 工具（基于 [marker](https://github.com/VikParuchuri/marker)）来完成这一步：
 
 ```bash
-# 安装 MinerU
-pip install magic-pdf
+# 1. 安装 PDF 转换依赖
+pip install -r pdf_to_md/requirements.txt
 
-# 批量转换 PDF 论文
-magic-pdf -p /path/to/papers/ -o /path/to/markdown/output/
+# 2. 批量转换 PDF → Markdown（首次运行会自动下载模型 ~3-5GB）
+python pdf_to_md/batch_convert.py --input /path/to/pdfs --output /path/to/markdown
 ```
 
-转换后的 Markdown 文件应保留原文的标题层级、段落结构、表格和关键数值。将所有 `.md` 文件放入同一个目录（即 `--corpus` 参数指向的路径）。
+转换后的 Markdown 文件保留原文的标题层级、段落结构、表格和关键数值。将所有 `.md` 文件放入同一个目录（该目录即后续 `--corpus` 参数指向的路径）。详见 [pdf_to_md/README.md](pdf_to_md/README.md)。
 
 > **注意**：PDF 直接阅读会消耗大量上下文窗口且无法精确定位段落。务必先将 PDF 转为 Markdown 再启动工作流。
 

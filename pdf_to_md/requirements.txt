@@ -1,0 +1,5 @@
+# PDF-to-Markdown conversion dependencies
+# Install: pip install -r requirements.txt
+
+marker-pdf>=1.0
+torch>=2.0
