@@ -116,6 +116,26 @@ nature-writing/
 
 ## Quick Start
 
+### Prerequisite: Convert Papers to Markdown
+
+The **zero-hallucination guarantee** of this workflow depends on local paper reading — all cited evidence must come from your provided local Markdown files, not from the LLM's training data "memory." Therefore, you must batch-convert your PDF papers into well-structured Markdown files before starting the workflow.
+
+We recommend [MinerU](https://github.com/opendatalab/MinerU) for PDF → Markdown conversion:
+
+```bash
+# Install MinerU
+pip install magic-pdf
+
+# Batch convert PDF papers
+magic-pdf -p /path/to/papers/ -o /path/to/markdown/output/
+```
+
+The converted Markdown files should preserve the original heading hierarchy, paragraph structure, tables, and key numerical values. Place all `.md` files in a single directory (the path you will pass to `--corpus`).
+
+> **Note**: Reading PDFs directly consumes excessive context windows and cannot precisely locate paragraphs. Always convert PDFs to Markdown first before launching the workflow.
+
+### Launch the Workflow
+
 ```bash
 # 1. Place your framework as local_framework.md in your paper directory
 # 2. Run the preparation script

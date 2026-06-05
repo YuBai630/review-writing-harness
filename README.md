@@ -115,6 +115,26 @@ nature-writing/
 
 ## 快速开始
 
+### 前置准备：将论文转换为 Markdown 格式
+
+本工作流的**零幻觉保证**建立在本地论文阅读之上——所有引用证据必须来自你提供的本地 Markdown 文件，而非 LLM 训练数据中的"记忆"。因此，在启动工作流之前，你需要将手头的 PDF 论文批量转换为结构良好的 Markdown 文件。
+
+推荐使用 [MinerU](https://github.com/opendatalab/MinerU) 进行 PDF → Markdown 转换：
+
+```bash
+# 安装 MinerU
+pip install magic-pdf
+
+# 批量转换 PDF 论文
+magic-pdf -p /path/to/papers/ -o /path/to/markdown/output/
+```
+
+转换后的 Markdown 文件应保留原文的标题层级、段落结构、表格和关键数值。将所有 `.md` 文件放入同一个目录（即 `--corpus` 参数指向的路径）。
+
+> **注意**：PDF 直接阅读会消耗大量上下文窗口且无法精确定位段落。务必先将 PDF 转为 Markdown 再启动工作流。
+
+### 启动工作流
+
 ```bash
 # 1. 将你的框架文件命名为 local_framework.md 放入论文目录
 # 2. 运行准备脚本
