@@ -10,6 +10,44 @@ Traditional literature review workflows produce **paper-by-paper laundry lists**
 
 More critically, asking a large language model (LLM) to "write a literature review" produces severe **hallucination problems**: the model invents non-existent paper titles, fabricates author names, and conjures up experimental data and performance metrics — these fabricated elements, once mixed into academic writing, are extremely difficult to detect and can lead to serious academic misconduct. `review-writing-harness` eliminates hallucinations at the source through two hard constraints: **(1) Framework constraint** — all claims must strictly correspond to the predefined H1/H2 heading structure in `local_framework.md`; the model cannot expand or deviate on its own. **(2) Local paper reading** — all cited evidence must come from the user-provided local Markdown paper corpus; doctor subagents read each paper and extract structured evidence with precise page/paragraph anchors, and are forbidden from citing any "memorized knowledge" from training data. The framework is the skeleton, the local papers are the flesh — together they form a closed evidence system that blocks hallucinations at the source.
 
+```
+                          ┌──────────────────────────┐
+                          │   local_framework.md     │
+                          │  (user-defined H1/H2)    │
+                          └────────────┬─────────────┘
+                                       │ hard constraint: all claims must fit
+                                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  review-writing-harness                      │
+│                                                             │
+│  Prepare ──▶ Doctors ──▶ Voters ──▶ Expert ──▶ Synthesizers│
+│     │            │           │          │            │       │
+│     │       read each    2-of-3    dedup+sort  per-H1 table │
+│     │       paper+extract majority  +map       +range+      │
+│     │       evidence                                   │    │
+│     ▼            ▼           ▼          ▼       patterns▼    │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │            Closed Evidence System (zero hallucination)│    │
+│  │  • All citations from local MD papers + exact anchors │    │
+│  │  • "Memorized knowledge" from training data forbidden │    │
+│  │  • Each evidence item has 12-dim comparative_dimensions│   │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                             │
+│  Main Writer ──▶ Validate                                   │
+│       │               │                                     │
+│   synthesis-first  word count/table coverage/                │
+│   4-layer protocol  synthesis density/incomparability        │
+└─────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+                          ┌──────────────────────────┐
+                          │   literature_review.md   │
+                          │  (tables + perf ranges   │
+                          │   + incomparability      │
+                          │   warnings + references) │
+                          └──────────────────────────┘
+```
+
 ## Our Solution
 
 `review-writing-harness` adds three key innovations to the local-MD review pipeline:
