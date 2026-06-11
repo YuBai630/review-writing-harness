@@ -22,7 +22,7 @@ H2_WORD_TARGET_RE = re.compile(r"<!--\s*word_target\s*:\s*(\d+)\s*-->", re.I)
 
 def read_text(path: Path, limit: int | None = None) -> str:
     data = path.read_text(encoding="utf-8", errors="replace")
-    data = data.lstrip("\ufeff")
+    data = data.lstrip("﻿")
     if limit is not None:
         return data[:limit]
     return data
@@ -47,7 +47,15 @@ def clean_heading(raw: str) -> str:
     return raw.strip().strip("#").strip()
 
 
-def parse_framework(path: Path) -> dict:
+def portable_path(abs_path: Path, run_root: Path) -> str:
+    """Return POSIX-style path relative to run_root.  Falls back to absolute."""
+    try:
+        return abs_path.relative_to(run_root).as_posix()
+    except ValueError:
+        return abs_path.as_posix()
+
+
+def parse_framework(path: Path, run_root: Path) -> dict:
     text = read_text(path)
     total_word_target = parse_total_word_target(text)
     headings: list[dict] = []
@@ -102,7 +110,8 @@ def parse_framework(path: Path) -> dict:
         )
 
     return {
-        "framework_path": str(path),
+        "framework_path": portable_path(path, run_root),
+        "framework_path_current_platform": str(path),
         "total_word_target": total_word_target,
         "total_word_tolerance": 0.10,
         "h2_word_tolerance": 0.20,
@@ -110,7 +119,7 @@ def parse_framework(path: Path) -> dict:
     }
 
 
-def parse_metadata(path: Path, existing_keys: set[str]) -> dict:
+def parse_metadata(path: Path, existing_keys: set[str], run_root: Path) -> dict:
     sample = read_text(path, limit=50000)
     title = None
     author = None
@@ -166,7 +175,8 @@ def parse_metadata(path: Path, existing_keys: set[str]) -> dict:
 
     return {
         "paper_id": slugify(path.stem, path.stem),
-        "path": str(path),
+        "path": portable_path(path, run_root),
+        "path_current_platform": str(path),
         "title": title or "Unknown",
         "authors": author or "Unknown",
         "year": year or "Unknown",
@@ -197,6 +207,9 @@ def collect_papers(corpus: Path, framework: Path, outdir: Path) -> list[Path]:
             continue
         if is_relative_to(resolved, outdir):
             continue
+        # Exclude historical nature_local_review_* run directories
+        if any(part.startswith("nature_local_review_") for part in path.parts):
+            continue
         papers.append(resolved)
     return papers
 
@@ -212,7 +225,7 @@ def make_outdir(corpus: Path, outdir: str | None) -> Path:
             target = (corpus / f"nature_local_review_{stamp}_{counter:02d}").resolve()
             counter += 1
     target.mkdir(parents=True, exist_ok=False)
-    for subdir in ["agent_prompts", "doctor_outputs", "voter_outputs", "expert_outputs", "synthesis_grids"]:
+    for subdir in ["agent_prompts", "doctor_outputs", "voter_output", "expert_outputs", "synthesis_grids"]:
         (target / subdir).mkdir(parents=True, exist_ok=True)
     return target
 
@@ -260,7 +273,7 @@ def framework_markdown(framework: dict) -> str:
     return "\n".join(lines)
 
 
-def doctor_prompt(batch_index: int, batch: list[dict], framework: dict, outdir: Path, max_agents: int) -> str:
+def doctor_prompt(batch_index: int, batch: list[dict], framework: dict, outdir: Path, max_agents: int, run_root: Path) -> str:
     schema = {
         "paper_id": "filename_without_ext",
         "citation_key": "author_year_keyword",
@@ -297,6 +310,8 @@ def doctor_prompt(batch_index: int, batch: list[dict], framework: dict, outdir: 
         f"- {paper['paper_id']} | {paper['citation_key']} | {paper['path']} | overflow_risk={paper['overflow_risk']}"
         for paper in batch
     )
+    rel_doctor_json = portable_path(outdir / "doctor_outputs" / f"doctor_batch_{batch_index:03d}.json", run_root)
+    rel_doctor_md = portable_path(outdir / "doctor_outputs" / f"doctor_batch_{batch_index:03d}.md", run_root)
     return f"""You are a doctor subagent for the nature-writing local-md-review workflow.
 
 Concurrency rule for the parent workflow: at most {max_agents} subagents may be active at once. You only handle this assigned batch.
@@ -304,8 +319,8 @@ Concurrency rule for the parent workflow: at most {max_agents} subagents may be 
 Read every assigned Markdown paper as fully as context allows. If a paper is too large to read fully, report overflow and list which sections you read. Map only relevant or possibly relevant evidence to exact H2 titles.
 
 Output JSON evidence items and a concise Markdown summary. If you can write files, write:
-- {outdir / 'doctor_outputs' / f'doctor_batch_{batch_index:03d}.json'}
-- {outdir / 'doctor_outputs' / f'doctor_batch_{batch_index:03d}.md'}
+- {rel_doctor_json}
+- {rel_doctor_md}
 
 Evidence schema:
 ```json
@@ -327,13 +342,16 @@ Assigned papers:
 """
 
 
-def voter_prompt(outdir: Path) -> str:
+def voter_prompt(outdir: Path, run_root: Path) -> str:
+    rel_framework = portable_path(outdir / "framework.json", run_root)
+    rel_manifest = portable_path(outdir / "paper_manifest.jsonl", run_root)
+    rel_doctor = portable_path(outdir / "doctor_outputs", run_root)
     return f"""You are one of exactly three independent thinking subagents for local-md-review voting.
 
 Read only:
-- {outdir / 'framework.json'}
-- {outdir / 'paper_manifest.jsonl'}
-- all files under {outdir / 'doctor_outputs'}
+- {rel_framework}
+- {rel_manifest}
+- all files under {rel_doctor}
 
 Do not read original papers. For each candidate paper_id + H2, vote included or excluded.
 
@@ -344,27 +362,39 @@ paper_id,heading,vote_result,vote_reason_summary
 """
 
 
-def expert_prompt(outdir: Path) -> str:
+def expert_prompt(outdir: Path, run_root: Path) -> str:
+    rel_framework = portable_path(outdir / "framework.json", run_root)
+    rel_manifest = portable_path(outdir / "paper_manifest.jsonl", run_root)
+    rel_csv = portable_path(outdir / "paper_heading_assignment.csv", run_root)
+    rel_doctor = portable_path(outdir / "doctor_outputs", run_root)
+    rel_evidence = portable_path(outdir / "local_evidence_map.json", run_root)
+    rel_audit = portable_path(outdir / "citation_audit.md", run_root)
     return f"""You are the domain expert merger for local-md-review.
 
 Inputs:
-- {outdir / 'framework.json'}
-- {outdir / 'paper_manifest.jsonl'}
-- {outdir / 'paper_heading_assignment.csv'}
-- all doctor outputs under {outdir / 'doctor_outputs'}
+- {rel_framework}
+- {rel_manifest}
+- {rel_csv}
+- all doctor outputs under {rel_doctor}
 
 Merge evidence by exact H2. Deduplicate near-identical claims. Sort direct before partial, then strong, moderate, weak. Preserve negative or contradictory evidence in citation_audit.md.
 
 If an H2 has fewer than two local direct + partial evidence items, mark external_needed=true and draft 1-3 precise external search queries. Do not fabricate external citations.
 
 Write or return:
-- {outdir / 'local_evidence_map.json'}
-- {outdir / 'citation_audit.md'}
+- {rel_evidence}
+- {rel_audit}
 """
 
 
-def synthesizer_prompt(outdir: Path, h1_title: str, h1_id: str) -> str:
+def synthesizer_prompt(outdir: Path, h1_title: str, h1_id: str, run_root: Path) -> str:
     """Generate a table-first synthesis prompt for one H1 section."""
+    rel_framework = portable_path(outdir / "framework.json", run_root)
+    rel_evidence = portable_path(outdir / "local_evidence_map.json", run_root)
+    rel_manifest = portable_path(outdir / "paper_manifest.jsonl", run_root)
+    rel_csv = portable_path(outdir / "paper_heading_assignment.csv", run_root)
+    rel_doctor = portable_path(outdir / "doctor_outputs", run_root)
+    rel_synthesis = portable_path(outdir / "synthesis_grids" / f"synthesis_{h1_id}.md", run_root)
     # Derive H2 children for this H1 and their comparison dimensions
     return f"""You are a table-first synthesizer for the nature-writing local-md-review workflow.
 
@@ -373,11 +403,11 @@ a structured synthesis grid. Do NOT write narrative prose — the main writer wi
 do that based on your output.
 
 Inputs:
-- {outdir / 'framework.json'}
-- {outdir / 'local_evidence_map.json'}
-- {outdir / 'paper_manifest.jsonl'}
-- {outdir / 'paper_heading_assignment.csv'}
-- {outdir / 'doctor_outputs'}/ (all doctor batch outputs)
+- {rel_framework}
+- {rel_evidence}
+- {rel_manifest}
+- {rel_csv}
+- {rel_doctor}/ (all doctor batch outputs)
 
 ===========================================================================
 OUTPUT 1 — COMPARISON TABLE (MANDATORY)
@@ -456,18 +486,24 @@ Example patterns:
    of 0.10–0.20 when tested on sleep disorder patients (evidence: @c; @d; @e)"
 
 Write your output to:
-- {outdir / 'synthesis_grids' / f'synthesis_{h1_id}.md'}
+- {rel_synthesis}
 """
 
 
-def main_writer_prompt(outdir: Path) -> str:
+def main_writer_prompt(outdir: Path, run_root: Path) -> str:
+    rel_framework = portable_path(outdir / "framework.json", run_root)
+    rel_evidence = portable_path(outdir / "local_evidence_map.json", run_root)
+    rel_synthesis = portable_path(outdir / "synthesis_grids", run_root)
+    rel_bib_in = portable_path(outdir / "references.bib", run_root)
+    rel_review = portable_path(outdir / "literature_review.md", run_root)
+    rel_bib_out = portable_path(outdir / "references.bib", run_root)
     return f"""You are the main writer for local-md-review.
 
 Inputs:
-- {outdir / 'framework.json'}
-- {outdir / 'local_evidence_map.json'}
-- {outdir / 'synthesis_grids'}/ (table-first synthesis outputs, one per H1 section)
-- {outdir / 'references.bib'} if it already exists
+- {rel_framework}
+- {rel_evidence}
+- {rel_synthesis}/ (table-first synthesis outputs, one per H1 section)
+- {rel_bib_in} if it already exists
 
 Draft review prose. Preserve exact H1/H2 title text, levels, and order. Keep total word count within total_word_target +/- 10%; keep H2 word_target sections within +/- 20%.
 
@@ -571,20 +607,20 @@ CITATION RULES
 - A comparative claim that says "A outperformed B" MUST cite both A and B.
 
 Write:
-- {outdir / 'literature_review.md'}
-- {outdir / 'references.bib'}
+- {rel_review}
+- {rel_bib_out}
 """
 
 
-def write_prompt_files(outdir: Path, framework: dict, batches: list[list[dict]], max_agents: int) -> None:
+def write_prompt_files(outdir: Path, framework: dict, batches: list[list[dict]], max_agents: int, run_root: Path) -> None:
     prompt_dir = outdir / "agent_prompts"
     for index, batch in enumerate(batches, start=1):
         (prompt_dir / f"doctor_batch_{index:03d}.md").write_text(
-            doctor_prompt(index, batch, framework, outdir, max_agents),
+            doctor_prompt(index, batch, framework, outdir, max_agents, run_root),
             encoding="utf-8",
         )
-    (prompt_dir / "thinking_voter_prompt.md").write_text(voter_prompt(outdir), encoding="utf-8")
-    (prompt_dir / "expert_merge_prompt.md").write_text(expert_prompt(outdir), encoding="utf-8")
+    (prompt_dir / "thinking_voter_prompt.md").write_text(voter_prompt(outdir, run_root), encoding="utf-8")
+    (prompt_dir / "expert_merge_prompt.md").write_text(expert_prompt(outdir, run_root), encoding="utf-8")
     # Generate one synthesizer prompt per H1 section that has H2 children with evidence potential
     h1_headings = [h for h in framework["headings"] if h["level"] == 1]
     for h1 in h1_headings:
@@ -593,10 +629,10 @@ def write_prompt_files(outdir: Path, framework: dict, batches: list[list[dict]],
             continue
         slug = h1["id"]
         (prompt_dir / f"synthesizer_{slug}.md").write_text(
-            synthesizer_prompt(outdir, h1["title"], h1["id"]),
+            synthesizer_prompt(outdir, h1["title"], h1["id"], run_root),
             encoding="utf-8",
         )
-    (prompt_dir / "main_writer_prompt.md").write_text(main_writer_prompt(outdir), encoding="utf-8")
+    (prompt_dir / "main_writer_prompt.md").write_text(main_writer_prompt(outdir, run_root), encoding="utf-8")
 
 
 def create_placeholders(outdir: Path, framework: dict) -> None:
@@ -657,6 +693,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--framework", required=True, help="Path to local_framework.md")
     parser.add_argument("--corpus", required=True, help="Directory containing local Markdown papers")
     parser.add_argument("--outdir", help="Optional output directory")
+    parser.add_argument("--run-root", help="Project root for portable relative paths (inferred if omitted)")
     parser.add_argument("--batch-size", type=int, default=20, help="Maximum papers per doctor subagent")
     parser.add_argument("--max-concurrent-agents", type=int, default=6, help="Workflow concurrency cap")
     parser.add_argument("--max-batch-bytes", type=int, default=1_800_000, help="Soft byte cap per doctor batch")
@@ -675,20 +712,34 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_concurrent_agents != 6:
         raise SystemExit("--max-concurrent-agents must remain 6 for this workflow.")
 
-    framework = parse_framework(framework_path)
+    # Determine run_root for portable relative paths
+    if args.run_root:
+        run_root = Path(args.run_root).expanduser().resolve()
+    else:
+        # Infer: use framework parent if corpus is underneath, else corpus parent
+        run_root = framework_path.parent
+        try:
+            corpus.relative_to(run_root)
+        except ValueError:
+            run_root = corpus.parent
+    if not run_root.is_dir():
+        raise SystemExit(f"run-root is not a directory: {run_root}")
+
+    framework = parse_framework(framework_path, run_root)
     outdir = make_outdir(corpus, args.outdir)
     papers = collect_papers(corpus, framework_path, outdir)
     if not papers:
         raise SystemExit("No Markdown papers found after excluding local_framework.md and the output directory.")
 
     keys: set[str] = set()
-    manifest = [parse_metadata(path, keys) for path in papers]
+    manifest = [parse_metadata(path, keys, run_root) for path in papers]
     batches = batch_papers(manifest, args.batch_size, args.max_batch_bytes)
     for index, batch in enumerate(batches, start=1):
         for paper in batch:
             paper["doctor_batch"] = index
 
-    framework["output_dir"] = str(outdir)
+    framework["output_dir"] = portable_path(outdir, run_root)
+    framework["output_dir_current_platform"] = str(outdir)
     framework["doctor_batch_count"] = len(batches)
     framework["max_concurrent_subagents"] = args.max_concurrent_agents
     framework["doctor_batch_size_limit"] = args.batch_size
@@ -698,9 +749,13 @@ def main(argv: list[str] | None = None) -> int:
     write_json(
         outdir / "run_config.json",
         {
-            "framework": str(framework_path),
-            "corpus": str(corpus),
-            "outdir": str(outdir),
+            "framework": portable_path(framework_path, run_root),
+            "framework_current_platform": str(framework_path),
+            "corpus": portable_path(corpus, run_root),
+            "corpus_current_platform": str(corpus),
+            "outdir": portable_path(outdir, run_root),
+            "outdir_current_platform": str(outdir),
+            "run_root": str(run_root),
             "batch_size": args.batch_size,
             "max_concurrent_subagents": args.max_concurrent_agents,
             "max_batch_bytes": args.max_batch_bytes,
@@ -709,7 +764,7 @@ def main(argv: list[str] | None = None) -> int:
             "doctor_wave_count": (len(batches) + args.max_concurrent_agents - 1) // args.max_concurrent_agents,
         },
     )
-    write_prompt_files(outdir, framework, batches, args.max_concurrent_agents)
+    write_prompt_files(outdir, framework, batches, args.max_concurrent_agents, run_root)
     create_placeholders(outdir, framework)
 
     print(f"Prepared local-md-review run: {outdir}")

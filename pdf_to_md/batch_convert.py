@@ -42,7 +42,7 @@ def setup_environment(model_dir: str | None = None, device: str = "cuda"):
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 
-def build_converter(output_dir: str):
+def build_converter(output_dir: str, device: str = "cuda"):
     """Build a marker converter with optimized batch sizes.
 
     The converter and models are created once and reused across all PDFs,
@@ -54,7 +54,7 @@ def build_converter(output_dir: str):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    models = create_model_dict()
+    models = create_model_dict(device=device)
 
     config_parser = ConfigParser({
         "output_dir": output_dir,
@@ -104,6 +104,8 @@ def convert_single(pdf_path: str, output_dir: str, config_parser, converter, sav
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        elif hasattr(torch, "mps") and torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
         return True
     except Exception as e:
@@ -116,6 +118,7 @@ def process_all_pdfs(
     output_dir: str,
     batch_size: int = 5,
     batch_delay: int = 10,
+    device: str = "cuda",
 ):
     """Batch convert all PDFs in a directory to Markdown.
 
@@ -165,7 +168,7 @@ def process_all_pdfs(
     print(f"Skipped:    {skip_count} (already exist)")
     print("[INFO] Loading marker models (one-time)...")
 
-    config_parser, converter, save_output_fn = build_converter(output_dir)
+    config_parser, converter, save_output_fn = build_converter(output_dir, device=device)
 
     print("[INFO] Models loaded. Starting conversion...")
     print("=" * 60)
@@ -222,7 +225,7 @@ Examples:
     parser.add_argument("--output", "-o", required=True, help="Directory for output Markdown files")
     parser.add_argument("--batch-size", type=int, default=5, help="PDFs per batch (default: 5)")
     parser.add_argument("--batch-delay", type=int, default=10, help="Seconds between batches (default: 10)")
-    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"], help="Compute device (default: cuda)")
+    parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu", "mps"], help="Compute device (default: auto)")
     parser.add_argument("--model-dir", default=None, help="Marker model cache directory")
     parser.add_argument("--no-quantize", action="store_true", help="Disable model quantization (uses more memory)")
 
@@ -231,6 +234,15 @@ Examples:
     if not os.path.isdir(args.input):
         print(f"Error: input directory not found: {args.input}")
         sys.exit(1)
+
+    if args.device == "auto":
+        import torch
+        if torch.cuda.is_available():
+            args.device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            args.device = "mps"
+        else:
+            args.device = "cpu"
 
     if args.no_quantize:
         os.environ["FOUNDATION_MODEL_QUANTIZE"] = "false"
@@ -242,6 +254,7 @@ Examples:
         output_dir=args.output,
         batch_size=args.batch_size,
         batch_delay=args.batch_delay,
+        device=args.device,
     )
 
 
