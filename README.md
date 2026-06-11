@@ -2,7 +2,9 @@
 
 # Review Writing Harness（综述写作框架）
 
-基于本地 Markdown 论文语料库的 synthesis-first 多智能体文献综述写作工作流。作为 Claude Code 中 `nature-writing` 技能的增强扩展。
+基于本地 Markdown 论文语料库的 synthesis-first 多智能体文献综述写作工作流。
+
+本项目基于 [nature-skills](https://github.com/Yuan1z0825/nature-skills) 中的 `nature-writing` 技能进行深度改进，在原版基础上新增了 Table-First 综合阶段、12 维结构化比较维度、synthesis-first 写作协议、跨平台可移植路径等关键增强，形成一套面向高质量文献综述的完整工作流。
 
 ## 解决的问题
 
@@ -126,6 +128,8 @@ review-writing-harness/
 
 本工作流的**零幻觉保证**建立在本地论文阅读之上——所有引用证据必须来自你提供的本地 Markdown 文件，而非 LLM 训练数据中的"记忆"。因此，在启动工作流之前，你需要将手头的 PDF 论文批量转换为结构良好的 Markdown 文件。
 
+#### 方式一：内置 pdf_to_md 工具（基于 marker）
+
 仓库内置了 `pdf_to_md/` 工具（基于 [marker](https://github.com/VikParuchuri/marker)）来完成这一步：
 
 ```bash
@@ -137,6 +141,27 @@ python pdf_to_md/batch_convert.py --input /path/to/pdfs --output /path/to/markdo
 ```
 
 转换后的 Markdown 文件保留原文的标题层级、段落结构、表格和关键数值。将所有 `.md` 文件放入同一个目录（该目录即后续 `--corpus` 参数指向的路径）。详见 [pdf_to_md/README.md](pdf_to_md/README.md)。
+
+#### 方式二：scansci-pdf MCP（推荐）
+
+[scansci-pdf](https://pypi.org/project/scansci-pdf/) 是一个学术 PDF 下载 MCP 服务器，支持 Sci-Hub、开放获取源、高校 WebVPN 和 Tor。与 Claude Code 集成后，你可以**直接用 DOI 或 arXiv ID 下载论文**，无需手动查找 PDF：
+
+```bash
+# 安装
+pip install scansci-pdf
+
+# 配置到 Claude Code MCP 服务器（在 settings.json 中添加）
+# "mcpServers": {
+#   "scansci-pdf": {
+#     "command": "scansci-pdf", "args": ["run"]
+#   }
+# }
+
+# 在 Claude Code 中直接下载论文
+scansci-pdf get 10.1038/s41586-024-xxxxx --output ./papers
+```
+
+配置完成后，你可以在 Claude Code 对话中直接说"下载这篇论文"，Claude 会自动调用 scansci-pdf 获取 PDF，再通过 pdf_to_md 转换为 Markdown 进入工作流。
 
 > **注意**：PDF 直接阅读会消耗大量上下文窗口且无法精确定位段落。务必先将 PDF 转为 Markdown 再启动工作流。
 
@@ -193,7 +218,9 @@ Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) 
 
 ## 与原版 nature-writing 的主要差异
 
-| 原版 | 增强版 |
+> 本项目基于 [nature-skills/ nature-writing](https://github.com/Yuan1z0825/nature-skills) 深度改进。以下是与原版 `nature-writing` 技能的对比：
+
+| 原版 nature-writing | 本增强版 |
 |------|--------|
 | 逐篇引用式写作 | Synthesis-first 四层协议 |
 | 无比较表要求 | 强制 12 维度比较表 |
@@ -205,6 +232,12 @@ Prepare → Doctors(×N) → Voters(×3) → Expert Merge → Synthesizers(×M) 
 ## 设计理念
 
 本工作流的核心设计原则是：**证据的原子单位应当从 `(论文, 章节, 主张)` 转换为 `(章节, 比较维度, 范围)`，在代理写出第一个字之前完成这一"转置"操作。** 这是区分"真正综合"与"高级流水账"的根本差异。
+
+## 致谢
+
+- [nature-skills](https://github.com/Yuan1z0825/nature-skills) — 本项目的上游基础，提供了 `nature-writing` 技能的原始架构、agent prompt 模板和工作流设计
+- [marker](https://github.com/VikParuchuri/marker) — PDF 转 Markdown 的核心引擎
+- [scansci-pdf](https://pypi.org/project/scansci-pdf/) — 学术论文下载 MCP 服务器
 
 ## 许可证
 

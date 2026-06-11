@@ -2,7 +2,9 @@
 
 # Review Writing Harness
 
-A synthesis-first multi-agent workflow for writing literature reviews from local Markdown paper corpora. Built as an extension to the `nature-writing` skill in Claude Code.
+A synthesis-first multi-agent workflow for writing literature reviews from local Markdown paper corpora.
+
+This project is a deep enhancement of the [`nature-writing`](https://github.com/Yuan1z0825/nature-skills) skill from [nature-skills](https://github.com/Yuan1z0825/nature-skills). It adds a Table-First synthesis stage, 12-dimension structured comparative dimensions, a synthesis-first writing protocol, cross-platform portable paths, and other key improvements on top of the original design.
 
 ## The Problem
 
@@ -127,6 +129,8 @@ review-writing-harness/
 
 The **zero-hallucination guarantee** of this workflow depends on local paper reading — all cited evidence must come from your provided local Markdown files, not from the LLM's training data "memory." Therefore, you must batch-convert your PDF papers into well-structured Markdown files before starting the workflow.
 
+#### Option 1: Built-in pdf_to_md tool (based on marker)
+
 The repo includes `pdf_to_md/` (built on [marker](https://github.com/VikParuchuri/marker)) for this step:
 
 ```bash
@@ -138,6 +142,27 @@ python pdf_to_md/batch_convert.py --input /path/to/pdfs --output /path/to/markdo
 ```
 
 The output Markdown files preserve the original heading hierarchy, paragraph structure, tables, and key numerical values. Place all `.md` files in a single directory (the path you will pass to `--corpus`). See [pdf_to_md/README.md](pdf_to_md/README.md) for details.
+
+#### Option 2: scansci-pdf MCP (Recommended)
+
+[scansci-pdf](https://pypi.org/project/scansci-pdf/) is an academic PDF download MCP server with support for Sci-Hub, open-access sources, university WebVPN, and Tor. Once integrated with Claude Code, you can **download papers directly by DOI or arXiv ID** without manually searching for PDFs:
+
+```bash
+# Install
+pip install scansci-pdf
+
+# Configure as Claude Code MCP server (add to settings.json)
+# "mcpServers": {
+#   "scansci-pdf": {
+#     "command": "scansci-pdf", "args": ["run"]
+#   }
+# }
+
+# Download a paper directly in Claude Code
+scansci-pdf get 10.1038/s41586-024-xxxxx --output ./papers
+```
+
+Once configured, you can simply say "download this paper" in your Claude Code session — Claude will automatically call scansci-pdf to fetch the PDF, then convert it to Markdown via pdf_to_md before entering the workflow.
 
 > **Note**: Reading PDFs directly consumes excessive context windows and cannot precisely locate paragraphs. Always convert PDFs to Markdown first before launching the workflow.
 
@@ -194,7 +219,9 @@ Total word target: 6000
 
 ## Key Changes from Original nature-writing
 
-| Original | Enhanced |
+> This project is a deep enhancement of [`nature-skills/nature-writing`](https://github.com/Yuan1z0825/nature-skills). Below is a comparison with the original `nature-writing` skill:
+
+| Original nature-writing | This Enhanced Version |
 |----------|----------|
 | Paper-by-paper citation writing | Synthesis-first 4-layer protocol |
 | No comparison tables required | Mandatory 12-dimension comparison tables |
@@ -206,6 +233,12 @@ Total word target: 6000
 ## Design Philosophy
 
 The core design principle: **The atomic unit of evidence should be transformed from `(paper, section, claim)` to `(section, comparison_dimension, range)`, completing this "transposition" before the agent writes a single word.** This is the fundamental difference between genuine synthesis and an advanced laundry list.
+
+## Acknowledgements
+
+- [nature-skills](https://github.com/Yuan1z0825/nature-skills) — The upstream foundation of this project, providing the original `nature-writing` skill architecture, agent prompt templates, and workflow design
+- [marker](https://github.com/VikParuchuri/marker) — The core PDF-to-Markdown conversion engine
+- [scansci-pdf](https://pypi.org/project/scansci-pdf/) — Academic paper download MCP server
 
 ## License
 
